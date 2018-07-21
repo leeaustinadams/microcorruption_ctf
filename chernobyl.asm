@@ -352,7 +352,7 @@
 4770:  8e4f 0000      mov	r15, 0x0(r14)
 4774:  3b41           pop	r11
 4776:  3041           ret
-4778 <create_hash_table>
+4778 <create_hash_table>        ; r14 = bucket_count, r15 = items_per_bucket
 4778:  0b12           push	r11
 477a:  0a12           push	r10
 477c:  0912           push	r9
@@ -362,50 +362,64 @@
 4784:  074f           mov	r15, r7
 4786:  094e           mov	r14, r9
 4788:  3f40 0a00      mov	#0xa, r15
-478c:  b012 7846      call	#0x4678 <malloc>
+478c:  b012 7846      call	#0x4678 <malloc> ; allocate 10 bytes for table struct
 4790:  0a4f           mov	r15, r10
-4792:  8f43 0000      clr	0x0(r15)
-4796:  8f47 0200      mov	r7, 0x2(r15)
-479a:  8f49 0400      mov	r9, 0x4(r15)
+4792:  8f43 0000      clr	0x0(r15) ; write zero item_count to first two bytes
+4796:  8f47 0200      mov	r7, 0x2(r15) ; write items_per_bucket to next two bytes
+479a:  8f49 0400      mov	r9, 0x4(r15) ; write bucket_count to next two bytes
 479e:  2b43           mov	#0x2, r11
 47a0:  0f47           mov	r7, r15
+    ;; if (items_per_bucket != 0) {
+    ;;   r11 = 2^(items_per_bucket + 1);
+    ;; }
 47a2:  0f93           tst	r15
 47a4:  0324           jz	#0x47ac <create_hash_table+0x34>
 47a6:  0b5b           add	r11, r11
 47a8:  1f83           dec	r15
 47aa:  fd23           jnz	#0x47a6 <create_hash_table+0x2e>
-47ac:  0f4b           mov	r11, r15
-47ae:  b012 7846      call	#0x4678 <malloc>
-47b2:  8a4f 0600      mov	r15, 0x6(r10)
-47b6:  0f4b           mov	r11, r15
-47b8:  b012 7846      call	#0x4678 <malloc>
-47bc:  8a4f 0800      mov	r15, 0x8(r10)
+47ac:  0f4b           mov	r11, r15 ; r15 becomes 2^(items_per_bucket+1) = items_per_bucket * pointer to table_entry, and also items_per_bucket * __int16_t
+47ae:  b012 7846      call	#0x4678 <malloc> ; allocate that many bytes
+47b2:  8a4f 0600      mov	r15, 0x6(r10)    ; table.?? = malloc(items_per_bucket * sizeof(table_entry *))
+47b6:  0f4b           mov	r11, r15         ;
+47b8:  b012 7846      call	#0x4678 <malloc> ; allocate that many bytes again
+47bc:  8a4f 0800      mov	r15, 0x8(r10)    ; table.item_counts = malloc(items_per_bucket * sizeof(__int16_t)
+    ;; if (items_per_bucket != 0) {
+    ;;   r8 = 2^items_per_bucket;
+    ;; }
 47c0:  1843           mov	#0x1, r8
 47c2:  0793           tst	r7
 47c4:  0324           jz	#0x47cc <create_hash_table+0x54>
 47c6:  0858           add	r8, r8
 47c8:  1783           dec	r7
 47ca:  fd23           jnz	#0x47c6 <create_hash_table+0x4e>
+
+    ;; r11 = sizeof(table_entry) * table.items_per_bucket;
 47cc:  0b49           mov	r9, r11
 47ce:  0b5b           add	r11, r11
 47d0:  0b5b           add	r11, r11
 47d2:  0b5b           add	r11, r11
 47d4:  0b59           add	r9, r11
-47d6:  0b5b           add	r11, r11
+47d6:  0b5b           add	r11, r11 ; r11 = 18 * r9 (e.g. 18 * 5 == 90) how many bytes to alloc for an array of 5 table_entry
+
+    ;; for (r9 = 0; r9 < table.bucket_count; r9++)
+    ;;   table.buckets[r9] = malloc(table.items_per_buckt * sizeof(table_entry));
+    ;;   table.item_counts[r9] = 0;
+    ;; }
 47d8:  0943           clr	r9
 47da:  0f3c           jmp	#0x47fa <create_hash_table+0x82>
 47dc:  0749           mov	r9, r7
-47de:  0757           add	r7, r7
+47de:  0757           add	r7, r7 ; r7 = 2 * i
 47e0:  164a 0600      mov	0x6(r10), r6
-47e4:  0657           add	r7, r6
+47e4:  0657           add	r7, r6 ; r6 = &table.buckets[i]
 47e6:  0f4b           mov	r11, r15
-47e8:  b012 7846      call	#0x4678 <malloc>
-47ec:  864f 0000      mov	r15, 0x0(r6)
-47f0:  175a 0800      add	0x8(r10), r7
-47f4:  8743 0000      clr	0x0(r7)
-47f8:  1953           inc	r9
-47fa:  0998           cmp	r8, r9
+47e8:  b012 7846      call	#0x4678 <malloc> ; allocate (items_per_bucket * 18)
+47ec:  864f 0000      mov	r15, 0x0(r6)     ; store address of item in table.data[i]
+47f0:  175a 0800      add	0x8(r10), r7     ; r7 = &table.item_counts[i]
+47f4:  8743 0000      clr	0x0(r7) ; table.item_counts[i] = 0
+47f8:  1953           inc	r9      ; r9++
+47fa:  0998           cmp	r8, r9  ; r9 < table.bucket_count
 47fc:  ef3b           jl	#0x47dc <create_hash_table+0x64>
+
 47fe:  0f4a           mov	r10, r15
 4800:  3641           pop	r6
 4802:  3741           pop	r7
@@ -414,7 +428,16 @@
 4808:  3a41           pop	r10
 480a:  3b41           pop	r11
 480c:  3041           ret
+    ;; hash: r15 = &value, returns result in r15
 480e <hash>
+	;; int16 hash(const char *value) {
+	;;     int16 result = 0;
+    ;;     for (unsigned long i = 0; i < strlen(value); i++) {
+    ;;         int16 c = (int16) value[i];
+    ;;         result = (result + c) * 31;
+    ;;    }
+    ;;     return result;
+    ;; }
 480e:  0e4f           mov	r15, r14
 4810:  0f43           clr	r15
 4812:  0b3c           jmp	#0x482a <hash+0x1c>
@@ -422,16 +445,17 @@
 4816:  8d11           sxt	r13
 4818:  0d5f           add	r15, r13
 481a:  0f4d           mov	r13, r15
-481c:  0f5f           add	r15, r15
-481e:  0f5f           add	r15, r15
-4820:  0f5f           add	r15, r15
-4822:  0f5f           add	r15, r15
-4824:  0f5f           add	r15, r15
-4826:  0f8d           sub	r13, r15
+481c:  0f5f           add	r15, r15 ; 2
+481e:  0f5f           add	r15, r15 ; 4
+4820:  0f5f           add	r15, r15 ; 8
+4822:  0f5f           add	r15, r15 ; 16
+4824:  0f5f           add	r15, r15 ; 32
+4826:  0f8d           sub	r13, r15 ; r15 = (31 * r15)
 4828:  1e53           inc	r14
-482a:  ce93 0000      tst.b	0x0(r14)
+482a:  ce93 0000      tst.b	0x0(r14) ; test for zero
 482e:  f223           jnz	#0x4814 <hash+0x6>
 4830:  3041           ret
+    ;; add_to_table: r13 = &pin, r14 = &name, r15 = &table
 4832 <add_to_table>
 4832:  0b12           push	r11
 4834:  0a12           push	r10
@@ -439,8 +463,8 @@
 4838:  0b4f           mov	r15, r11
 483a:  0a4e           mov	r14, r10
 483c:  094d           mov	r13, r9
-483e:  1e4f 0200      mov	0x2(r15), r14
-4842:  1c4f 0400      mov	0x4(r15), r12
+483e:  1e4f 0200      mov	0x2(r15), r14 ; r14 = table.items_per_bucket
+4842:  1c4f 0400      mov	0x4(r15), r12 ; r12 = table.bucket_count
 4846:  0f4e           mov	r14, r15
 4848:  0f93           tst	r15
 484a:  0324           jz	#0x4852 <add_to_table+0x20>
@@ -452,14 +476,21 @@
 4856:  3c50 0300      add	#0x3, r12
 485a:  0c11           rra	r12
 485c:  0c11           rra	r12
-485e:  2c9b           cmp	@r11, r12
-4860:  0434           jge	#0x486a <add_to_table+0x38>
-4862:  1e53           inc	r14
+485e:  2c9b           cmp	@r11, r12                   ; r12 = (table.items_per_bucket * table.bucket_count) / 4
+4860:  0434           jge	#0x486a <add_to_table+0x38> ; if ((table.items_per_bucket * table.bucket_count) / 4) >= table.item_count {
+4862:  1e53           inc	r14                         ; new_bucket_count = table.bucket_count + 1
 4864:  0f4b           mov	r11, r15
-4866:  b012 d448      call	#0x48d4 <rehash>
-486a:  9b53 0000      inc	0x0(r11)
+4866:  b012 d448      call	#0x48d4 <rehash> ; rehash the table with new_max_entries }
+486a:  9b53 0000      inc	0x0(r11)         ; table.entries_used++
 486e:  0f4a           mov	r10, r15
-4870:  b012 0e48      call	#0x480e <hash>
+4870:  b012 0e48      call	#0x480e <hash> ; hash the name
+
+    ;; r12 = 1;
+    ;; r14 = table.items_per_bucket;
+    ;; while (r14) {
+    ;;   r12 += r12;
+    ;;   r14--;
+    ;; }
 4874:  1c43           mov	#0x1, r12
 4876:  1e4b 0200      mov	0x2(r11), r14
 487a:  0e93           tst	r14
@@ -467,23 +498,32 @@
 487e:  0c5c           add	r12, r12
 4880:  1e83           dec	r14
 4882:  fd23           jnz	#0x487e <add_to_table+0x4c>
+
 4884:  3c53           add	#-0x1, r12
-4886:  0cff           and	r15, r12
-4888:  0c5c           add	r12, r12
-488a:  1f4b 0800      mov	0x8(r11), r15
-488e:  0f5c           add	r12, r15
-4890:  2e4f           mov	@r15, r14
-4892:  1b4b 0600      mov	0x6(r11), r11
-4896:  0b5c           add	r12, r11
+4886:  0cff           and	r15, r12 ; r15 = hash of name, r12 = (2^table.items_per_bucket) - 1. Mask the lowest table.items_per_bucket bits.
+4888:  0c5c           add	r12, r12 ; double it since pointers are 2 bytes r12 = bucket_index
+488a:  1f4b 0800      mov	0x8(r11), r15 ; r15 = &table.item_counts[0]
+488e:  0f5c           add	r12, r15      ; r15 = &table.item_counts[bucket_index]
+4890:  2e4f           mov	@r15, r14     ; r14 = table.item_counts[bucket_index]
+4892:  1b4b 0600      mov	0x6(r11), r11 ; r11 = &table.item_pointers[0]
+4896:  0b5c           add	r12, r11      ; r11 = &table.item_pointers[bucket_index]
 4898:  0c4e           mov	r14, r12
-489a:  0c5c           add	r12, r12
-489c:  0c5c           add	r12, r12
-489e:  0c5c           add	r12, r12
-48a0:  0c5e           add	r14, r12
-48a2:  0c5c           add	r12, r12
-48a4:  2c5b           add	@r11, r12
+489a:  0c5c           add	r12, r12 ; 2
+489c:  0c5c           add	r12, r12 ; 4
+489e:  0c5c           add	r12, r12 ; 8
+48a0:  0c5e           add	r14, r12 ; 9
+48a2:  0c5c           add	r12, r12 ; r12 = 18 * r14 index of entry = byte offset of entry
+48a4:  2c5b           add	@r11, r12 ; r12 = &table.entries[table.indices[entry_index]];
 48a6:  1e53           inc	r14
 48a8:  8f4e 0000      mov	r14, 0x0(r15)
+    ;; r14 = &name;
+    ;; for (r15 = 0; r15 < 16; r15++) {
+    ;;   if (*r14 != '\0') [
+    ;;     table.data[i].name[r15] = *r14;
+    ;;   } else {
+    ;;     break;
+    ;;   }
+    ;; }
 48ac:  0f43           clr	r15
 48ae:  093c           jmp	#0x48c2 <add_to_table+0x90>
 48b0:  0b4c           mov	r12, r11
@@ -496,12 +536,13 @@
 48c2:  6e4a           mov.b	@r10, r14
 48c4:  4e93           tst.b	r14
 48c6:  f423           jnz	#0x48b0 <add_to_table+0x7e>
-48c8:  8c49 1000      mov	r9, 0x10(r12)
+48c8:  8c49 1000      mov	r9, 0x10(r12) ; store pin
 48cc:  3941           pop	r9
 48ce:  3a41           pop	r10
 48d0:  3b41           pop	r11
 48d2:  3041           ret
-48d4 <rehash>
+    ;; 
+48d4 <rehash>                   ; r14 = new_items_per_bucket, r15 = &table
 48d4:  0b12           push	r11
 48d6:  0a12           push	r10
 48d8:  0912           push	r9
@@ -513,22 +554,29 @@
 48e4:  2183           decd	sp
 48e6:  0b4f           mov	r15, r11
 48e8:  164f 0200      mov	0x2(r15), r6
-48ec:  154f 0600      mov	0x6(r15), r5
-48f0:  144f 0800      mov	0x8(r15), r4
-48f4:  8f4e 0200      mov	r14, 0x2(r15)
-48f8:  8f43 0000      clr	0x0(r15)
+48ec:  154f 0600      mov	0x6(r15), r5  ; r5 = &table.buckets[0]
+48f0:  144f 0800      mov	0x8(r15), r4  ; r4 = &table.item_counts[0]
+48f4:  8f4e 0200      mov	r14, 0x2(r15) ; table.items_per_bucket = new_items_per_bucket
+48f8:  8f43 0000      clr	0x0(r15)      ; table.entries_used = 0
 48fc:  2a43           mov	#0x2, r10
+    ;; int16 i = 2;
+    ;; int16 count = new_items_per_bucket;
+    ;; while (count > 0) {
+    ;;   i *= 2;
+    ;;   count--;
 48fe:  0e93           tst	r14
 4900:  0324           jz	#0x4908 <rehash+0x34>
 4902:  0a5a           add	r10, r10
 4904:  1e83           dec	r14
 4906:  fd23           jnz	#0x4902 <rehash+0x2e>
+    ;; }
+    ;; malloc i bytes (2^new_items_per_bucket)
 4908:  0f4a           mov	r10, r15
 490a:  b012 7846      call	#0x4678 <malloc>
-490e:  8b4f 0600      mov	r15, 0x6(r11)
+490e:  8b4f 0600      mov	r15, 0x6(r11) ; table.data = new_data
 4912:  0f4a           mov	r10, r15
 4914:  b012 7846      call	#0x4678 <malloc>
-4918:  8b4f 0800      mov	r15, 0x8(r11)
+4918:  8b4f 0800      mov	r15, 0x8(r11) ; table.data2 = new_data2
 491c:  0a43           clr	r10
 491e:  1843           mov	#0x1, r8
 4920:  173c           jmp	#0x4950 <rehash+0x7c>
@@ -538,14 +586,14 @@
 492a:  0759           add	r9, r7
 492c:  1f4b 0400      mov	0x4(r11), r15
 4930:  0e4f           mov	r15, r14
-4932:  0e5e           add	r14, r14
-4934:  0e5e           add	r14, r14
-4936:  0e5e           add	r14, r14
-4938:  0e5f           add	r15, r14
+4932:  0e5e           add	r14, r14 ; 2
+4934:  0e5e           add	r14, r14 ; 4
+4936:  0e5e           add	r14, r14 ; 8
+4938:  0e5f           add	r15, r14 ; 9
 493a:  0f4e           mov	r14, r15
-493c:  0f5f           add	r15, r15
+493c:  0f5f           add	r15, r15 ; r15 = 10 * 0x4(r11)
 493e:  b012 7846      call	#0x4678 <malloc>
-4942:  874f 0000      mov	r15, 0x0(r7)
+4942:  874f 0000      mov	r15, 0x0(r7) ; table.data = new data
 4946:  195b 0800      add	0x8(r11), r9
 494a:  8943 0000      clr	0x0(r9)
 494e:  1a53           inc	r10
@@ -603,7 +651,7 @@
 49c6:  3a41           pop	r10
 49c8:  3b41           pop	r11
 49ca:  3041           ret
-49cc <get_from_table>
+49cc <get_from_table>           ; r14 =, r15 = &table returns pin in r15 if found, otherwise -1
 49cc:  0b12           push	r11
 49ce:  0a12           push	r10
 49d0:  0912           push	r9
@@ -621,8 +669,8 @@
 49ec:  0b5b           add	r11, r11
 49ee:  1d83           dec	r13
 49f0:  fd23           jnz	#0x49ec <get_from_table+0x20>
-49f2:  3b53           add	#-0x1, r11
-49f4:  0bff           and	r15, r11
+49f2:  3b53           add	#-0x1, r11 ; r11 = mask bits
+49f4:  0bff           and	r15, r11   ; mask bits
 49f6:  0b5b           add	r11, r11
 49f8:  1d4a 0600      mov	0x6(r10), r13
 49fc:  0d5b           add	r11, r13
@@ -636,14 +684,14 @@
 4a0e:  3950 1200      add	#0x12, r9
 4a12:  0f93           tst	r15
 4a14:  0320           jnz	#0x4a1c <get_from_table+0x50>
-4a16:  1f47 1000      mov	0x10(r7), r15
+4a16:  1f47 1000      mov	0x10(r7), r15 ; pin to r15
 4a1a:  073c           jmp	#0x4a2a <get_from_table+0x5e>
 4a1c:  1853           inc	r8
 4a1e:  1f4a 0800      mov	0x8(r10), r15
 4a22:  0f5b           add	r11, r15
 4a24:  289f           cmp	@r15, r8
 4a26:  ee3b           jl	#0x4a04 <get_from_table+0x38>
-4a28:  3f43           mov	#-0x1, r15
+4a28:  3f43           mov	#-0x1, r15 ; not found
 4a2a:  3641           pop	r6
 4a2c:  3741           pop	r7
 4a2e:  3841           pop	r8
@@ -809,14 +857,14 @@
 4b78:  3f40 0300      mov	#0x3, r15
 4b7c:  b012 7847      call	#0x4778 <create_hash_table>
 4b80:  084f           mov	r15, r8
-4b82:  3f40 384a      mov	#0x4a38, r15 ; "Welcome to the lock controller
+4b82:  3f40 384a      mov	#0x4a38, r15 ; "Welcome to the lock controller"
 4b86:  b012 504d      call	#0x4d50 <puts>
-4b8a:  3f40 584a      mov	#0x4a58, r15
+4b8a:  3f40 584a      mov	#0x4a58, r15 ; "You can open the door by entering 'access [your name] [pin]'"
 4b8e:  b012 504d      call	#0x4d50 <puts>
-4b92:  3f40 954a      mov	#0x4a95, r15
+4b92:  3f40 954a      mov	#0x4a95, r15 ; ""
 4b96:  b012 504d      call	#0x4d50 <puts>
 4b9a:  0e43           clr	r14
-4b9c:  3740 ff05      mov	#0x5ff, r7
+4b9c:  3740 ff05      mov	#0x5ff, r7 ; Clear 1535 bytes of the stack
 4ba0:  053c           jmp	#0x4bac <run+0x46>
 4ba2:  0f41           mov	sp, r15
 4ba4:  0f5e           add	r14, r15
@@ -826,105 +874,111 @@
 4bae:  f937           jge	#0x4ba2 <run+0x3c>
 4bb0:  3e40 5005      mov	#0x550, r14
 4bb4:  0f41           mov	sp, r15
-4bb6:  b012 404d      call	#0x4d40 <getsn>
-4bba:  0b41           mov	sp, r11
+4bb6:  b012 404d      call	#0x4d40 <getsn> ; read at most r14 (1360) bytes to location pointed at by r15 (stack pointer)
+4bba:  0b41           mov	sp, r11 ; [your name] [pin] end up at 0x3dec
 4bbc:  923c           jmp	#0x4ce2 <run+0x17c>
-4bbe:  7f90 6100      cmp.b	#0x61, r15
+4bbe:  7f90 6100      cmp.b	#0x61, r15 ; while iterating through [your name] [pin], compare to ascii 'a'
 4bc2:  3a20           jne	#0x4c38 <run+0xd2>
 4bc4:  0e4b           mov	r11, r14
-4bc6:  3e50 0700      add	#0x7, r14
-4bca:  0b4e           mov	r14, r11
+4bc6:  3e50 0700      add	#0x7, r14 ; "move forward" 7 bytes (past "access ")
+4bca:  0b4e           mov	r14, r11  ; r11 now points at entered name
 4bcc:  073c           jmp	#0x4bdc <run+0x76>
-4bce:  7f90 2000      cmp.b	#0x20, r15
+4bce:  7f90 2000      cmp.b	#0x20, r15 ; compare to ascii space ' ' for separating [your name] from [pin]
 4bd2:  0320           jne	#0x4bda <run+0x74>
-4bd4:  cb43 0000      mov.b	#0x0, 0x0(r11)
+4bd4:  cb43 0000      mov.b	#0x0, 0x0(r11) ; place a null terminator after [your name]
 4bd8:  043c           jmp	#0x4be2 <run+0x7c>
 4bda:  1b53           inc	r11
 4bdc:  6f4b           mov.b	@r11, r15
-4bde:  4f93           tst.b	r15
+4bde:  4f93           tst.b	r15 ; test for end of input (null byte)
 4be0:  f623           jnz	#0x4bce <run+0x68>
-4be2:  1b53           inc	r11
+4be2:  1b53           inc	r11 ; "move forward" past ' ' between name and pin
 4be4:  0a43           clr	r10
 4be6:  0b3c           jmp	#0x4bfe <run+0x98>
 4be8:  0d4a           mov	r10, r13
 4bea:  0d5d           add	r13, r13
 4bec:  0d5d           add	r13, r13
 4bee:  0d5a           add	r10, r13
-4bf0:  0d5d           add	r13, r13
-4bf2:  6a4b           mov.b	@r11, r10
-4bf4:  8a11           sxt	r10
-4bf6:  3a50 d0ff      add	#0xffd0, r10
-4bfa:  0a5d           add	r13, r10
+4bf0:  0d5d           add	r13, r13 ; r13 = 10 * r10?
+4bf2:  6a4b           mov.b	@r11, r10 ; read next byte of [pin]
+4bf4:  8a11           sxt	r10       ; sign extend
+4bf6:  3a50 d0ff      add	#0xffd0, r10 ; subtract 47
+4bfa:  0a5d           add	r13, r10     ; r10 now contains the pin as an int
 4bfc:  1b53           inc	r11
 4bfe:  6f4b           mov.b	@r11, r15
-4c00:  4f93           tst.b	r15
+4c00:  4f93           tst.b	r15 ; test for end of input (null byte)
 4c02:  0324           jz	#0x4c0a <run+0xa4>
-4c04:  7f90 3b00      cmp.b	#0x3b, r15
-4c08:  ef23           jne	#0x4be8 <run+0x82>
-4c0a:  0f48           mov	r8, r15
+4c04:  7f90 3b00      cmp.b	#0x3b, r15 ; compare with ascii ';'
+4c08:  ef23           jne	#0x4be8 <run+0x82> ; if it's not ';' then iterate through pin
+4c0a:  0f48           mov	r8, r15            ; else get from the hash table pointed to by r8
 4c0c:  b012 cc49      call	#0x49cc <get_from_table>
-4c10:  3f93           cmp	#-0x1, r15
+4c10:  3f93           cmp	#-0x1, r15 ; if returned -1, not found
 4c12:  0320           jne	#0x4c1a <run+0xb4>
-4c14:  3f40 964a      mov	#0x4a96, r15
+4c14:  3f40 964a      mov	#0x4a96, r15 ; "No such box."
 4c18:  413c           jmp	#0x4c9c <run+0x136>
-4c1a:  0aef           xor	r15, r10
-4c1c:  3af0 ff7f      and	#0x7fff, r10
-4c20:  0820           jnz	#0x4c32 <run+0xcc>
-4c22:  0f9a           cmp	r10, r15
+4c1a:  0aef           xor	r15, r10 ; xor the retrieved pin with the entered pin
+4c1c:  3af0 ff7f      and	#0x7fff, r10 ; mask off the top bit
+4c20:  0820           jnz	#0x4c32 <run+0xcc> ; if the result is not zero, the pins didn't match (hash collision?)
+4c22:  0f9a           cmp	r10, r15           ; if the result is zero (pin matches) test to see if top bit is set in retrieved pin
 4c24:  0334           jge	#0x4c2c <run+0xc6>
-4c26:  3f40 a34a      mov	#0x4aa3, r15
+4c26:  3f40 a34a      mov	#0x4aa3, r15 ; "Access granted."
 4c2a:  383c           jmp	#0x4c9c <run+0x136>
-4c2c:  3f40 b34a      mov	#0x4ab3, r15
+4c2c:  3f40 b34a      mov	#0x4ab3, r15 ; "Access granted; but account not activated."
 4c30:  353c           jmp	#0x4c9c <run+0x136>
-4c32:  3f40 de4a      mov	#0x4ade, r15
+4c32:  3f40 de4a      mov	#0x4ade, r15 ; "Access denied"
 4c36:  323c           jmp	#0x4c9c <run+0x136>
-4c38:  7f90 6e00      cmp.b	#0x6e, r15
+4c38:  7f90 6e00      cmp.b	#0x6e, r15 ; compare to ascii 'n'
 4c3c:  4020           jne	#0x4cbe <run+0x158>
 4c3e:  094b           mov	r11, r9
-4c40:  2952           add	#0x4, r9
+4c40:  2952           add	#0x4, r9 ; "move forward" 4 bytes (past "new ")
 4c42:  0b49           mov	r9, r11
 4c44:  073c           jmp	#0x4c54 <run+0xee>
-4c46:  7f90 2000      cmp.b	#0x20, r15
+    ;; begin read name of new user
+4c46:  7f90 2000      cmp.b	#0x20, r15 ; compare to ascii ' '
 4c4a:  0320           jne	#0x4c52 <run+0xec>
-4c4c:  cb43 0000      mov.b	#0x0, 0x0(r11)
+4c4c:  cb43 0000      mov.b	#0x0, 0x0(r11) ; if it is ' ' then insert a null byte to terminate
 4c50:  043c           jmp	#0x4c5a <run+0xf4>
 4c52:  1b53           inc	r11
 4c54:  6f4b           mov.b	@r11, r15
 4c56:  4f93           tst.b	r15
 4c58:  f623           jnz	#0x4c46 <run+0xe0>
-4c5a:  1b53           inc	r11
+4c5a:  1b53           inc	r11 ; r11 now points at beginning of pin
 4c5c:  0a43           clr	r10
 4c5e:  0b3c           jmp	#0x4c76 <run+0x110>
-4c60:  0c4a           mov	r10, r12
+    ;; end read name of new user
+    ;; begin read pin of new user
+4c60:  0c4a           mov	r10, r12 ;<----------------------------------------------------<
 4c62:  0c5c           add	r12, r12
 4c64:  0c5c           add	r12, r12
 4c66:  0c5a           add	r10, r12
-4c68:  0c5c           add	r12, r12
-4c6a:  6a4b           mov.b	@r11, r10
-4c6c:  8a11           sxt	r10
-4c6e:  3a50 d0ff      add	#0xffd0, r10
-4c72:  0a5c           add	r12, r10
+4c68:  0c5c           add	r12, r12 ; r12 = 10 * r10
+4c6a:  6a4b           mov.b	@r11, r10 ; put next digit in r10
+4c6c:  8a11           sxt	r10       ; sign extend to int16
+4c6e:  3a50 d0ff      add	#0xffd0, r10 ; subtract 48 to convert from ascii to integer
+4c72:  0a5c           add	r12, r10     ; add the integer to value accumulated in r12
 4c74:  1b53           inc	r11
 4c76:  6f4b           mov.b	@r11, r15
-4c78:  4f93           tst.b	r15
+4c78:  4f93           tst.b	r15 ; test for end of input
 4c7a:  0324           jz	#0x4c82 <run+0x11c>
-4c7c:  7f90 3b00      cmp.b	#0x3b, r15
-4c80:  ef23           jne	#0x4c60 <run+0xfa>
+4c7c:  7f90 3b00      cmp.b	#0x3b, r15 ; compare to ascii ';'
+4c80:  ef23           jne	#0x4c60 <run+0xfa> ;>------------------------------------------^
+    ;; end read pin of new user
+    ;; begin validate pin
 4c82:  0a93           tst	r10
-4c84:  0334           jge	#0x4c8c <run+0x126>
-4c86:  3f40 ec4a      mov	#0x4aec, r15
+4c84:  0334           jge	#0x4c8c <run+0x126> ; if r10 >= 0
+4c86:  3f40 ec4a      mov	#0x4aec, r15        ; "Can not have a pin with the high bit set."
 4c8a:  083c           jmp	#0x4c9c <run+0x136>
 4c8c:  0e49           mov	r9, r14
 4c8e:  0f48           mov	r8, r15
 4c90:  b012 cc49      call	#0x49cc <get_from_table>
-4c94:  3f93           cmp	#-0x1, r15
+4c94:  3f93           cmp	#-0x1, r15 ; if result is not -1, username found
 4c96:  0524           jeq	#0x4ca2 <run+0x13c>
-4c98:  3f40 124b      mov	#0x4b12, r15
-4c9c:  b012 504d      call	#0x4d50 <puts>
+4c98:  3f40 124b      mov	#0x4b12, r15 ; "User already has an account."
+4c9c:  b012 504d      call	#0x4d50 <puts> ; output message pointed to by r15
 4ca0:  1c3c           jmp	#0x4cda <run+0x174>
+    ;; end validate pin
 4ca2:  0a12           push	r10
 4ca4:  0912           push	r9
-4ca6:  3012 2f4b      push	#0x4b2f
+4ca6:  3012 2f4b      push	#0x4b2f ; "Adding account %s with pin %x."
 4caa:  b012 4844      call	#0x4448 <printf>
 4cae:  3150 0600      add	#0x6, sp
 4cb2:  0d4a           mov	r10, r13
@@ -933,19 +987,23 @@
 4cb8:  b012 3248      call	#0x4832 <add_to_table>
 4cbc:  0e3c           jmp	#0x4cda <run+0x174>
 4cbe:  3f40 544b      mov	#0x4b54, r15
-4cc2:  b012 504d      call	#0x4d50 <puts>
+4cc2:  b012 504d      call	#0x4d50 <puts> ; "Invalid command."
 4cc6:  1f43           mov	#0x1, r15
-4cc8:  3150 0006      add	#0x600, sp
+4cc8:  3150 0006      add	#0x600, sp ; "free" up the stack
 4ccc:  3741           pop	r7
 4cce:  3841           pop	r8
 4cd0:  3941           pop	r9
 4cd2:  3a41           pop	r10
 4cd4:  3b41           pop	r11
 4cd6:  3041           ret
+    ;; while (*r11 == ';') {
+    ;;   r11++;
+    ;; }
 4cd8:  1b53           inc	r11
-4cda:  fb90 3b00 0000 cmp.b	#0x3b, 0x0(r11)
+4cda:  fb90 3b00 0000 cmp.b	#0x3b, 0x0(r11) ; compare to ascii ';'
 4ce0:  fb27           jeq	#0x4cd8 <run+0x172>
-4ce2:  6f4b           mov.b	@r11, r15
+
+4ce2:  6f4b           mov.b	@r11, r15 ; iterate through [your name] [pin]
 4ce4:  4f93           tst.b	r15
 4ce6:  6b23           jnz	#0x4bbe <run+0x58>
 4ce8:  0e43           clr	r14
