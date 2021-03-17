@@ -198,7 +198,7 @@
 45bc:  0a12           push	r10
 45be:  0912           push	r9
 45c0:  0b4f           mov	r15, r11
-45c2:  3f40 6645      mov	#0x4566, r15
+45c2:  3f40 6645      mov	#0x4566, r15 ; "\n\n"
 45c6:  b012 504d      call	#0x4d50 <puts>
 45ca:  1f4b 0400      mov	0x4(r11), r15
 45ce:  0e4f           mov	r15, r14
@@ -211,19 +211,19 @@
 45dc:  1b12 0200      push	0x2(r11)
 45e0:  2b12           push	@r11
 45e2:  0b12           push	r11
-45e4:  3012 6945      push	#0x4569
+45e4:  3012 6945      push	#0x4569 ; "@%x [alloc] [p %x] [n %x] [s %x]\n"
 45e8:  b012 4844      call	#0x4448 <printf>
 45ec:  3150 0a00      add	#0xa, sp
 45f0:  0a4b           mov	r11, r10
 45f2:  3a50 0600      add	#0x6, r10
 45f6:  0a12           push	r10
-45f8:  3012 8b45      push	#0x458b
+45f8:  3012 8b45      push	#0x458b ; "{%x} [ "
 45fc:  b012 4844      call	#0x4448 <printf>
 4600:  2152           add	#0x4, sp
 4602:  0943           clr	r9
 4604:  083c           jmp	#0x4616 <walk+0x5c>
 4606:  2a12           push	@r10
-4608:  3012 9445      push	#0x4594
+4608:  3012 9445      push	#0x4594 ; "%x "
 460c:  b012 4844      call	#0x4448 <printf>
 4610:  2152           add	#0x4, sp
 4612:  1953           inc	r9
@@ -243,7 +243,7 @@
 4638:  1b12 0200      push	0x2(r11)
 463c:  2b12           push	@r11
 463e:  0b12           push	r11
-4640:  3012 9845      push	#0x4598
+4640:  3012 9845      push	#0x4598 ; "@%x [freed] [p %x] [n %x] [s %x]\n"
 4644:  b012 4844      call	#0x4448 <printf>
 4648:  3150 0a00      add	#0xa, sp
 464c:  1b4b 0200      mov	0x2(r11), r11
@@ -266,90 +266,90 @@
 4672:  696e           addc.b	@r14, r9
 4674:  672e           jc	#0x4344 <__none__+0x4344>
 ...
-4678 <malloc>
+4678 <malloc>                   ; r15 = size in bytes, returns memory address in r15
 4678:  0b12           push	r11
 467a:  c293 0424      tst.b	&0x2404
-467e:  0f24           jz	#0x469e <malloc+0x26>
-4680:  1e42 0024      mov	&0x2400, r14
-4684:  8e4e 0000      mov	r14, 0x0(r14)
-4688:  8e4e 0200      mov	r14, 0x2(r14)
-468c:  1d42 0224      mov	&0x2402, r13
-4690:  3d50 faff      add	#0xfffa, r13
-4694:  0d5d           add	r13, r13
-4696:  8e4d 0400      mov	r13, 0x4(r14)
-469a:  c243 0424      mov.b	#0x0, &0x2404
-469e:  1b42 0024      mov	&0x2400, r11
-46a2:  0e4b           mov	r11, r14
-46a4:  1d4e 0400      mov	0x4(r14), r13
+467e:  0f24           jz	#0x469e <malloc+0x26> ; if first_block.size_and_used != 0
+4680:  1e42 0024      mov	&0x2400, r14 ; else r14 = &first_block
+4684:  8e4e 0000      mov	r14, 0x0(r14) ; first_block.next = first_block
+4688:  8e4e 0200      mov	r14, 0x2(r14) ; first_block.prev = first_block
+468c:  1d42 0224      mov	&0x2402, r13  ; r13 = first_block.prev
+4690:  3d50 faff      add	#0xfffa, r13  ; r13 -= 10
+4694:  0d5d           add	r13, r13      ; r13 *= 2
+4696:  8e4d 0400      mov	r13, 0x4(r14) ; first_block.size_and_used = r13
+469a:  c243 0424      mov.b	#0x0, &0x2404 ; heap_header.needs_init = false
+469e:  1b42 0024      mov	&0x2400, r11  ; r11 = first_block
+46a2:  0e4b           mov	r11, r14      ; r14 = first_block
+46a4:  1d4e 0400      mov	0x4(r14), r13 ; r13 = heap_header.size_and_used
 46a8:  1db3           bit	#0x1, r13
-46aa:  2820           jnz	#0x46fc <malloc+0x84>
+46aa:  2820           jnz	#0x46fc <malloc+0x84> ; if low bit not set (block is free)
 46ac:  0c4d           mov	r13, r12
 46ae:  12c3           clrc
-46b0:  0c10           rrc	r12
+46b0:  0c10           rrc	r12 ; r12 = block size
 46b2:  0c9f           cmp	r15, r12
-46b4:  2338           jl	#0x46fc <malloc+0x84>
-46b6:  0b4f           mov	r15, r11
-46b8:  3b50 0600      add	#0x6, r11
+46b4:  2338           jl	#0x46fc <malloc+0x84> ; if allocation size >= block size
+46b6:  0b4f           mov	r15, r11              ; r11 = allocation size
+46b8:  3b50 0600      add	#0x6, r11 ; r11 = allocation size + 6 for block header
 46bc:  0c9b           cmp	r11, r12
-46be:  042c           jc	#0x46c8 <malloc+0x50>
-46c0:  1dd3           bis	#0x1, r13
-46c2:  8e4d 0400      mov	r13, 0x4(r14)
+46be:  042c           jc	#0x46c8 <malloc+0x50> ; if allocation_size + 6 <= block size
+46c0:  1dd3           bis	#0x1, r13             ; set low bit (block in use)
+46c2:  8e4d 0400      mov	r13, 0x4(r14)         ; block.size_and_used
 46c6:  163c           jmp	#0x46f4 <malloc+0x7c>
-46c8:  0d4f           mov	r15, r13
-46ca:  0d5d           add	r13, r13
-46cc:  1dd3           bis	#0x1, r13
-46ce:  8e4d 0400      mov	r13, 0x4(r14)
+46c8:  0d4f           mov	r15, r13 ; else
+46ca:  0d5d           add	r13, r13 ; r13 = allocation size * 2
+46cc:  1dd3           bis	#0x1, r13     ; set block used
+46ce:  8e4d 0400      mov	r13, 0x4(r14) ; block.size_and_used
 46d2:  0d4e           mov	r14, r13
-46d4:  3d50 0600      add	#0x6, r13
-46d8:  0d5f           add	r15, r13
-46da:  8d4e 0000      mov	r14, 0x0(r13)
-46de:  9d4e 0200 0200 mov	0x2(r14), 0x2(r13)
-46e4:  0c8f           sub	r15, r12
-46e6:  3c50 faff      add	#0xfffa, r12
-46ea:  0c5c           add	r12, r12
-46ec:  8d4c 0400      mov	r12, 0x4(r13)
-46f0:  8e4d 0200      mov	r13, 0x2(r14)
-46f4:  0f4e           mov	r14, r15
-46f6:  3f50 0600      add	#0x6, r15
+46d4:  3d50 0600      add	#0x6, r13 ; r13 = block.size_and_used + 6
+46d8:  0d5f           add	r15, r13  ; r13 = end of block.memory
+46da:  8d4e 0000      mov	r14, 0x0(r13) ; next_block.prev = block
+46de:  9d4e 0200 0200 mov	0x2(r14), 0x2(r13) ; next_block.next = block.next
+46e4:  0c8f           sub	r15, r12           ; r12 = block.size -= allocation size
+46e6:  3c50 faff      add	#0xfffa, r12       ; block.size -= 10
+46ea:  0c5c           add	r12, r12           ; block.size *= 2
+46ec:  8d4c 0400      mov	r12, 0x4(r13)      ; next_block.next = r12
+46f0:  8e4d 0200      mov	r13, 0x2(r14)      ; block.prev = r13
+46f4:  0f4e           mov	r14, r15 ; r15 = &block
+46f6:  3f50 0600      add	#0x6, r15 ; r15 = &block memory
 46fa:  0e3c           jmp	#0x4718 <malloc+0xa0>
-46fc:  0d4e           mov	r14, r13
-46fe:  1e4e 0200      mov	0x2(r14), r14
+46fc:  0d4e           mov	r14, r13 ; r13 = &block
+46fe:  1e4e 0200      mov	0x2(r14), r14 ; r13 = block.next
 4702:  0e9d           cmp	r13, r14
-4704:  0228           jnc	#0x470a <malloc+0x92>
+4704:  0228           jnc	#0x470a <malloc+0x92> ; if r13 != r14 (haven't reached end of blocks)
 4706:  0e9b           cmp	r11, r14
-4708:  cd23           jne	#0x46a4 <malloc+0x2c>
-470a:  3f40 5e46      mov	#0x465e, r15
-470e:  b012 504d      call	#0x4d50 <puts>
+4708:  cd23           jne	#0x46a4 <malloc+0x2c> ;
+470a:  3f40 5e46      mov	#0x465e, r15   ; else (have reached end of blocks)
+470e:  b012 504d      call	#0x4d50 <puts> ; "Heap exhausted; aborting"
 4712:  3040 3e44      br	#0x443e <__stop_progExec__>
 4716:  0f43           clr	r15
 4718:  3b41           pop	r11
 471a:  3041           ret
-471c <free>
+471c <free>                     ; r15 = pointer to free
 471c:  0b12           push	r11
-471e:  3f50 faff      add	#0xfffa, r15
-4722:  1d4f 0400      mov	0x4(r15), r13
-4726:  3df0 feff      and	#0xfffe, r13
-472a:  8f4d 0400      mov	r13, 0x4(r15)
-472e:  2e4f           mov	@r15, r14
-4730:  1c4e 0400      mov	0x4(r14), r12
+471e:  3f50 faff      add	#0xfffa, r15 ; r15 -= 6, r15 = &block_to_free
+4722:  1d4f 0400      mov	0x4(r15), r13 ; r13 = block_to_free.size_and_used
+4726:  3df0 feff      and	#0xfffe, r13  ; clear used bit
+472a:  8f4d 0400      mov	r13, 0x4(r15) ; write block_to_free.size_and_used
+472e:  2e4f           mov	@r15, r14     ; r14 = prev_block
+4730:  1c4e 0400      mov	0x4(r14), r12 ; r12 = prev_block.size_and_used
 4734:  1cb3           bit	#0x1, r12
-4736:  0d20           jnz	#0x4752 <free+0x36>
-4738:  3c50 0600      add	#0x6, r12
-473c:  0c5d           add	r13, r12
-473e:  8e4c 0400      mov	r12, 0x4(r14)
-4742:  9e4f 0200 0200 mov	0x2(r15), 0x2(r14)
-4748:  1d4f 0200      mov	0x2(r15), r13
-474c:  8d4e 0000      mov	r14, 0x0(r13)
-4750:  2f4f           mov	@r15, r15
-4752:  1e4f 0200      mov	0x2(r15), r14
-4756:  1d4e 0400      mov	0x4(r14), r13
+4736:  0d20           jnz	#0x4752 <free+0x36> ; if prev_block is not used
+4738:  3c50 0600      add	#0x6, r12           ; r12 = prev_block.size + 6 (for header)
+473c:  0c5d           add	r13, r12            ; r12 = prev_block.size + 6 + block_to_free.size
+473e:  8e4c 0400      mov	r12, 0x4(r14)       ; write prev_block.size_and_used
+4742:  9e4f 0200 0200 mov	0x2(r15), 0x2(r14)  ; prev_block.next = block_to_free.next
+4748:  1d4f 0200      mov	0x2(r15), r13       ; r13 = block_to_free.next
+474c:  8d4e 0000      mov	r14, 0x0(r13)       ; next_block.prev = prev_block
+4750:  2f4f           mov	@r15, r15           ; r15 = prev_block
+4752:  1e4f 0200      mov	0x2(r15), r14       ; r14 = prev_block.next
+4756:  1d4e 0400      mov	0x4(r14), r13       ; r13 = prev_block.next.size_and_used
 475a:  1db3           bit	#0x1, r13
-475c:  0b20           jnz	#0x4774 <free+0x58>
-475e:  1d5f 0400      add	0x4(r15), r13
-4762:  3d50 0600      add	#0x6, r13
-4766:  8f4d 0400      mov	r13, 0x4(r15)
-476a:  9f4e 0200 0200 mov	0x2(r14), 0x2(r15)
-4770:  8e4f 0000      mov	r15, 0x0(r14)
+475c:  0b20           jnz	#0x4774 <free+0x58> ; if prev_block.next is not used
+475e:  1d5f 0400      add	0x4(r15), r13       ; r13 = prev_block.size_and_used
+4762:  3d50 0600      add	#0x6, r13           ; r13 += 6
+4766:  8f4d 0400      mov	r13, 0x4(r15)       ; write prev_block.size_and_used
+476a:  9f4e 0200 0200 mov	0x2(r14), 0x2(r15)  ; prev_block.next = prev_block.next.next
+4770:  8e4f 0000      mov	r15, 0x0(r14)       ; prev_block.next.prev = block_to_free
 4774:  3b41           pop	r11
 4776:  3041           ret
 4778 <create_hash_table>        ; r14 = bucket_count, r15 = items_per_bucket
@@ -514,8 +514,8 @@
 48a0:  0c5e           add	r14, r12 ; 9
 48a2:  0c5c           add	r12, r12 ; r12 = 18 * r14 index of entry = byte offset of entry
 48a4:  2c5b           add	@r11, r12 ; r12 = &table.entries[table.indices[entry_index]];
-48a6:  1e53           inc	r14
-48a8:  8f4e 0000      mov	r14, 0x0(r15)
+48a6:  1e53           inc	r14       ;increment item_counts[bucket_index]
+48a8:  8f4e 0000      mov	r14, 0x0(r15) ; write item_counts[bucket_index]
     ;; r14 = &name;
     ;; for (r15 = 0; r15 < 16; r15++) {
     ;;   if (*r14 != '\0') [
@@ -524,18 +524,18 @@
     ;;     break;
     ;;   }
     ;; }
-48ac:  0f43           clr	r15
+48ac:  0f43           clr	r15 ; r15 = 0 do {
 48ae:  093c           jmp	#0x48c2 <add_to_table+0x90>
-48b0:  0b4c           mov	r12, r11
+48b0:  0b4c           mov	r12, r11 ; r11 = &entry.name
 48b2:  0b5f           add	r15, r11
-48b4:  cb4e 0000      mov.b	r14, 0x0(r11)
-48b8:  1f53           inc	r15
+48b4:  cb4e 0000      mov.b	r14, 0x0(r11) ; copy name[i] to entry.name[i]
+48b8:  1f53           inc	r15           ; i++
 48ba:  3f90 0f00      cmp	#0xf, r15
-48be:  0424           jeq	#0x48c8 <add_to_table+0x96>
+48be:  0424           jeq	#0x48c8 <add_to_table+0x96> ; if (i == 15) break;
 48c0:  1a53           inc	r10
-48c2:  6e4a           mov.b	@r10, r14
-48c4:  4e93           tst.b	r14
-48c6:  f423           jnz	#0x48b0 <add_to_table+0x7e>
+48c2:  6e4a           mov.b	@r10, r14 ; r14 = name[i]
+48c4:  4e93           tst.b	r14       ;
+48c6:  f423           jnz	#0x48b0 <add_to_table+0x7e> ; } while (r14 != '\0');
 48c8:  8c49 1000      mov	r9, 0x10(r12) ; store pin
 48cc:  3941           pop	r9
 48ce:  3a41           pop	r10
@@ -651,19 +651,19 @@
 49c6:  3a41           pop	r10
 49c8:  3b41           pop	r11
 49ca:  3041           ret
-49cc <get_from_table>           ; r14 =, r15 = &table returns pin in r15 if found, otherwise -1
+49cc <get_from_table>           ; r14 = &account name, r15 = &table returns pin in r15 if found, otherwise -1
 49cc:  0b12           push	r11
 49ce:  0a12           push	r10
 49d0:  0912           push	r9
 49d2:  0812           push	r8
 49d4:  0712           push	r7
 49d6:  0612           push	r6
-49d8:  0a4f           mov	r15, r10
-49da:  064e           mov	r14, r6
-49dc:  0f4e           mov	r14, r15
-49de:  b012 0e48      call	#0x480e <hash>
+49d8:  0a4f           mov	r15, r10 ; r10 = &table
+49da:  064e           mov	r14, r6  ; r6 = &account name
+49dc:  0f4e           mov	r14, r15 ; r15 = &account name
+49de:  b012 0e48      call	#0x480e <hash> ; r15 = hashed account name
 49e2:  1b43           mov	#0x1, r11
-49e4:  1d4a 0200      mov	0x2(r10), r13
+49e4:  1d4a 0200      mov	0x2(r10), r13 ; r13 = items_per_bucket
 49e8:  0d93           tst	r13
 49ea:  0324           jz	#0x49f2 <get_from_table+0x26>
 49ec:  0b5b           add	r11, r11
@@ -852,7 +852,7 @@
 4b6a:  0912           push	r9
 4b6c:  0812           push	r8
 4b6e:  0712           push	r7
-4b70:  3150 00fa      add	#0xfa00, sp
+4b70:  3150 00fa      add	#0xfa00, sp ;
 4b74:  3e40 0500      mov	#0x5, r14
 4b78:  3f40 0300      mov	#0x3, r15
 4b7c:  b012 7847      call	#0x4778 <create_hash_table>
@@ -967,8 +967,8 @@
 4c84:  0334           jge	#0x4c8c <run+0x126> ; if r10 >= 0
 4c86:  3f40 ec4a      mov	#0x4aec, r15        ; "Can not have a pin with the high bit set."
 4c8a:  083c           jmp	#0x4c9c <run+0x136>
-4c8c:  0e49           mov	r9, r14
-4c8e:  0f48           mov	r8, r15
+4c8c:  0e49           mov	r9, r14 ; &account name
+4c8e:  0f48           mov	r8, r15 ; &table
 4c90:  b012 cc49      call	#0x49cc <get_from_table>
 4c94:  3f93           cmp	#-0x1, r15 ; if result is not -1, username found
 4c96:  0524           jeq	#0x4ca2 <run+0x13c>
@@ -976,14 +976,14 @@
 4c9c:  b012 504d      call	#0x4d50 <puts> ; output message pointed to by r15
 4ca0:  1c3c           jmp	#0x4cda <run+0x174>
     ;; end validate pin
-4ca2:  0a12           push	r10
-4ca4:  0912           push	r9
+4ca2:  0a12           push	r10     ; pin
+4ca4:  0912           push	r9      ; &account name
 4ca6:  3012 2f4b      push	#0x4b2f ; "Adding account %s with pin %x."
 4caa:  b012 4844      call	#0x4448 <printf>
 4cae:  3150 0600      add	#0x6, sp
-4cb2:  0d4a           mov	r10, r13
-4cb4:  0e49           mov	r9, r14
-4cb6:  0f48           mov	r8, r15
+4cb2:  0d4a           mov	r10, r13 ; r13 = pin
+4cb4:  0e49           mov	r9, r14  ; r14 = &account name
+4cb6:  0f48           mov	r8, r15  ; r15 = table
 4cb8:  b012 3248      call	#0x4832 <add_to_table>
 4cbc:  0e3c           jmp	#0x4cda <run+0x174>
 4cbe:  3f40 544b      mov	#0x4b54, r15
